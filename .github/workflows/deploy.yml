@@ -44,8 +44,8 @@ jobs:
           SSH="ssh -i /tmp/deploy_key -o StrictHostKeyChecking=no ubuntu@$SERVER_IP"
           SCP="scp -i /tmp/deploy_key -o StrictHostKeyChecking=no"
 
-          # Create dirs
-          $SSH "mkdir -p ~/ekehi-explorer/backend ~/ekehi-explorer/frontend"
+          # Create backend dir; wipe and re-create frontend dir so scp copies cleanly
+          $SSH "mkdir -p ~/ekehi-explorer/backend && rm -rf ~/ekehi-explorer/frontend"
 
           # Stop backend
           $SSH "sudo systemctl stop ekehi-explorer || true"
@@ -58,8 +58,8 @@ jobs:
           # Install prod deps on server (no devDeps, no workspace resolution)
           $SSH "cd ~/ekehi-explorer/backend && npm install --omit=dev"
 
-          # Upload frontend static files
-          $SCP -r frontend/dist/.              ubuntu@$SERVER_IP:~/ekehi-explorer/frontend/
+          # Upload frontend static files (dest must not exist so scp creates it as the folder)
+          $SCP -r frontend/dist ubuntu@$SERVER_IP:~/ekehi-explorer/frontend
 
           # Restart backend + reload nginx
           $SSH "sudo systemctl start ekehi-explorer && sudo systemctl reload nginx"
