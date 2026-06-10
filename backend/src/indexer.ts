@@ -66,7 +66,7 @@ function buildAddrMap(): void {
   ];
   for (const [key, kind] of mapping) {
     const addr = CONTRACTS[key];
-    if (addr) ADDR_KIND[addr.toLowerCase()] = kind;
+    if (typeof addr === 'string') ADDR_KIND[addr.toLowerCase()] = kind;
   }
   log(`Address map: ${JSON.stringify(ADDR_KIND)}`);
 }
@@ -495,7 +495,7 @@ async function handleNftTransfer(evt: EthLog): Promise<void> {
       const uriData = NFT_IFACE.encodeFunctionData('tokenURI', [tokenId]);
       const uriHex  = await ethCall(CONTRACTS.EKHDynamicNFT, uriData);
       if (uriHex && uriHex !== '0x') {
-        [tokenUri] = NFT_IFACE.decodeFunctionResult('tokenURI', uriHex) as [string];
+        [tokenUri] = NFT_IFACE.decodeFunctionResult('tokenURI', uriHex) as unknown as [string];
       }
     } catch { /* tokenURI may revert */ }
 
@@ -510,8 +510,8 @@ async function handleNftTransfer(evt: EthLog): Promise<void> {
             ethCall(CONTRACTS.EKHDynamicNFT, NFT_IFACE.encodeFunctionData('name', [])),
             ethCall(CONTRACTS.EKHDynamicNFT, NFT_IFACE.encodeFunctionData('symbol', [])),
           ]);
-          if (nameHex && nameHex !== '0x') [name] = NFT_IFACE.decodeFunctionResult('name', nameHex) as [string];
-          if (symHex  && symHex  !== '0x') [symbol] = NFT_IFACE.decodeFunctionResult('symbol', symHex) as [string];
+          if (nameHex && nameHex !== '0x') [name] = NFT_IFACE.decodeFunctionResult('name', nameHex) as unknown as [string];
+          if (symHex  && symHex  !== '0x') [symbol] = NFT_IFACE.decodeFunctionResult('symbol', symHex) as unknown as [string];
         } catch { /* use defaults */ }
         run(
           `INSERT OR IGNORE INTO nft_collections
