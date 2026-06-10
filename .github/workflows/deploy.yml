@@ -61,7 +61,15 @@ jobs:
           # Upload frontend static files (dest must not exist so scp creates it as the folder)
           $SCP -r frontend/dist ubuntu@$SERVER_IP:~/ekehi-explorer/frontend
 
+          # Install / update systemd service unit
+          $SCP ekehi-explorer.service ubuntu@$SERVER_IP:~/ekehi-explorer.service
+          $SSH "sudo cp ~/ekehi-explorer.service /etc/systemd/system/ekehi-explorer.service && sudo systemctl daemon-reload && sudo systemctl enable ekehi-explorer"
+
+          # Install / update nginx config
+          $SCP ekehi-explorer.nginx ubuntu@$SERVER_IP:~/ekehi-explorer.nginx
+          $SSH "sudo cp ~/ekehi-explorer.nginx /etc/nginx/sites-available/ekehi-explorer && sudo ln -sf /etc/nginx/sites-available/ekehi-explorer /etc/nginx/sites-enabled/ekehi-explorer && sudo nginx -t"
+
           # Restart backend + reload nginx
-          $SSH "sudo systemctl start ekehi-explorer && sudo systemctl reload nginx"
+          $SSH "sudo systemctl restart ekehi-explorer && sudo systemctl reload nginx"
 
           rm /tmp/deploy_key
