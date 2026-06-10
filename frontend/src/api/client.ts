@@ -197,13 +197,14 @@ export interface BlockMetric {
 
 // ── Normalizers ────────────────────────────────────────────────────────────────
 
-function normalizeProposal(p: Record<string, unknown>): Proposal {
+function normalizeProposal(p: Proposal): Proposal {
+  const q = p as unknown as Record<string, unknown>;
   return {
-    ...(p as Proposal),
-    votesFor:     (p.votes_for     ?? p.votesFor     ?? '0') as string,
-    votesAgainst: (p.votes_against ?? p.votesAgainst ?? '0') as string,
-    startBlock:   (p.start_block   ?? p.startBlock)          as number,
-    endBlock:     (p.end_block     ?? p.endBlock)            as number,
+    ...p,
+    votesFor:     (q.votes_for     ?? p.votesFor     ?? '0') as string,
+    votesAgainst: (q.votes_against ?? p.votesAgainst ?? '0') as string,
+    startBlock:   (q.start_block   ?? p.startBlock)          as number,
+    endBlock:     (q.end_block     ?? p.endBlock)            as number,
   };
 }
 

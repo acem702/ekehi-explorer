@@ -1,9 +1,10 @@
+import React from 'react';
 import clsx from 'clsx';
 
-interface Props { className?: string; }
+interface Props { className?: string; style?: React.CSSProperties; }
 
-export function Sk({ className }: Props) {
-  return <div className={clsx('skeleton', className)} />;
+export function Sk({ className, style }: Props) {
+  return <div className={clsx('skeleton', className)} style={style} />;
 }
 
 export function SkRow({ cols = 4 }: { cols?: number }) {

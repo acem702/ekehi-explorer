@@ -47,7 +47,7 @@ export default function RWADetail() {
     setLoading(true);
     api.rwaAsset(id)
       .then(data => {
-        setAsset(data.asset ?? data);
+        setAsset(data);
         setListings(data.listings ?? []);
       })
       .catch(() => setError('Asset not found'))
