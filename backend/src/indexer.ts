@@ -79,7 +79,6 @@ function contractAddresses(): string[] {
 
 const T = {
   Transfer:          ethers.id('Transfer(address,address,uint256)'),
-  AssetTokenized:    ethers.id('AssetTokenized(uint256,uint8,address,bytes32)'),
   ProposalCreated:   ethers.id('ProposalCreated(uint256,address,uint8,string)'),
   VoteCast:          ethers.id('VoteCast(uint256,address,uint8,uint256)'),
   ProposalFinalized: ethers.id('ProposalFinalized(uint256,uint8)'),
@@ -90,10 +89,6 @@ const T = {
 };
 
 // ── ABI interfaces ────────────────────────────────────────────────────────────
-
-const RWA_IFACE = new ethers.Interface([
-  'function getAsset(uint256) view returns (uint256,uint8,address,bytes32,string,string,uint256,uint256,uint8,uint256,bool,bool)',
-]);
 
 const GOV_IFACE = new ethers.Interface([
   'function getProposal(uint256) view returns (uint256,address,uint8,string,bytes,address,uint256,uint256,uint256,uint256,uint256,uint8,uint256,uint256,uint256)',
@@ -418,10 +413,7 @@ async function processLogs(logs: EthLog[]): Promise<void> {
     const t0   = evt.topics[0];
     if (!t0) continue;
 
-    if (addr === CONTRACTS.EKHRWARegistry?.toLowerCase() && t0 === T.AssetTokenized) {
-      await handleAssetTokenized(evt);
-
-    } else if (addr === CONTRACTS.EKHDynamicNFT?.toLowerCase() && t0 === T.Transfer) {
+    if (addr === CONTRACTS.EKHDynamicNFT?.toLowerCase() && t0 === T.Transfer) {
       await handleNftTransfer(evt);
 
     } else if (addr === CONTRACTS.EKHGovernor?.toLowerCase()) {
@@ -446,39 +438,6 @@ const ASSET_TYPES  = ['Property', 'Business', 'Commodity', 'Financial', 'IP', 'O
 const ASSET_STATUS = ['Active', 'Frozen', 'Redeemed'];
 const GOV_TYPES    = ['General', 'ParameterChange', 'Upgrade', 'Treasury', 'Emergency'];
 const GOV_STATUS   = ['Pending', 'Active', 'Passed', 'Failed', 'Executed', 'Canceled'];
-
-async function handleAssetTokenized(evt: EthLog): Promise<void> {
-  try {
-    if (!CONTRACTS.EKHRWARegistry) return;
-    const assetId  = BigInt(evt.topics[1]).toString();
-    const calldata = RWA_IFACE.encodeFunctionData('getAsset', [assetId]);
-    const result   = await ethCall(CONTRACTS.EKHRWARegistry, calldata);
-    if (!result || result === '0x') return;
-    const r = RWA_IFACE.decodeFunctionResult('getAsset', result);
-    const blockNum = parseInt(evt.blockNumber, 16);
-    run(
-      `INSERT OR REPLACE INTO rwa_assets
-         (id, asset_type, name, owner, title_hash, metadata_uri, jurisdiction,
-          valuation_usd, total_shares, verified, accredited_only, status, created_block, updated_block)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?)`,
-      (r[0] as bigint).toString(),
-      ASSET_TYPES[Number(r[1])] ?? 'Property',
-      '',
-      (r[2] as string).toLowerCase(),
-      r[3] as string,
-      r[4] as string,
-      r[5] as string,
-      (r[6] as bigint).toString(),
-      (r[7] as bigint).toString(),
-      r[11] ? 1 : 0,
-      ASSET_STATUS[Number(r[8])] ?? 'Active',
-      blockNum, blockNum,
-    );
-    log(`RWA asset tokenized: id=${(r[0] as bigint).toString()}`);
-  } catch (e) {
-    log(`handleAssetTokenized error: ${(e as Error).message}`);
-  }
-}
 
 async function handleNftTransfer(evt: EthLog): Promise<void> {
   try {

@@ -1,15 +1,61 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { api, RwaAsset, RwaListing, formatEKH } from '../api/client';
+import {
+  api, RwaAsset, RwaListing, RwaShareholder, RwaValuationEntry, RwaDocument, formatEKH,
+} from '../api/client';
 import CopyHash from '../components/CopyHash';
 import Badge from '../components/Badge';
 import { SkDetail } from '../components/Skeleton';
 
+// ── Asset type icons (all 11 native types) ────────────────────────────────────
+
 const TYPE_ICONS: Record<string, string> = {
-  PROPERTY: '🏘', BUSINESS: '🏢', COMMODITY: '⚙',
+  Property:             '🏘',
+  Business:             '🏢',
+  Commodity:            '⚙',
+  Bond:                 '📄',
+  Art:                  '🎨',
+  PrivateEquity:        '💼',
+  Invoice:              '🧾',
+  IntellectualProperty: '💡',
+  CarbonCredit:         '🌿',
+  PreciousMetal:        '🪙',
+  Infrastructure:       '🏗',
 };
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+function formatUSD(wei: string): string {
+  try { return (BigInt(wei || '0') / 10n ** 18n).toLocaleString(); }
+  catch { return '0'; }
+}
+
+function bps(n: number): string {
+  if (!n) return '—';
+  return `${n} bps (${(n / 100).toFixed(2)}%)`;
+}
+
+function blockOrNone(val: string | number, label = 'No expiry'): string {
+  if (!val || String(val) === '0') return label;
+  return `Block ${Number(val).toLocaleString()}`;
+}
+
+// Node serialises RegulationType via Debug: "Open", "RegD", "Custom(\"NG-SEC\")"
+// Extract just the readable label.
+function fmtRegulation(raw: string): string {
+  if (!raw) return 'Open';
+  const custom = raw.match(/^Custom\("?(.+?)"?\)$/);
+  if (custom) return custom[1];
+  const labels: Record<string, string> = {
+    Open: 'Open', RegD: 'Reg D', RegS: 'Reg S',
+    RegCF: 'Reg CF', MiFIDII: 'MiFID II', AIFMD: 'AIFMD',
+  };
+  return labels[raw] ?? raw;
+}
+
+// ── Sub-components ────────────────────────────────────────────────────────────
+
+function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div className="field-row">
       <span className="field-label">{label}</span>
@@ -18,22 +64,113 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   );
 }
 
-function formatUSD(wei: string): string {
-  try {
-    const n = BigInt(wei || '0');
-    return (n / 10n ** 18n).toLocaleString();
-  } catch { return '0'; }
+function ShareholdersTable({ id }: { id: string }) {
+  const [holders, setHolders] = useState<RwaShareholder[]>([]);
+  const [loaded,  setLoaded]  = useState(false);
+
+  useEffect(() => {
+    api.rwaShareholders(id)
+      .then(setHolders)
+      .catch(() => setHolders([]))
+      .finally(() => setLoaded(true));
+  }, [id]);
+
+  if (!loaded) return <div className="text-muted text-sm py-4">Loading shareholders…</div>;
+  if (!holders.length) return <div className="text-muted text-sm py-4">No shareholders on record.</div>;
+
+  // Sort by shares descending
+  const sorted = [...holders].sort((a, b) =>
+    Number(BigInt(b.shares) - BigInt(a.shares)),
+  );
+
+  return (
+    <div className="divide-y divide-border">
+      <div className="hidden md:grid grid-cols-[1fr_8rem_8rem] gap-4 th border-b border-border bg-s2/40">
+        <span>Address</span>
+        <span className="text-right">Shares</span>
+        <span className="text-right">%</span>
+      </div>
+      {sorted.map((h, i) => {
+        const totalAll = sorted.reduce((s, x) => s + BigInt(x.shares), 0n);
+        const pct = totalAll > 0n
+          ? ((Number(BigInt(h.shares) * 10000n / totalAll)) / 100).toFixed(2)
+          : '0.00';
+        return (
+          <div key={i} className="grid md:grid-cols-[1fr_8rem_8rem] gap-4 px-4 py-3 items-center text-sm hover:bg-s2 transition-colors">
+            <CopyHash hash={h.address} type="address" full className="text-xs font-mono" />
+            <span className="text-right text-white text-xs font-mono">{Number(h.shares).toLocaleString()}</span>
+            <span className="text-right text-muted text-xs">{pct}%</span>
+          </div>
+        );
+      })}
+    </div>
+  );
 }
 
-function bps(n: number): string {
-  if (!n) return '—';
-  return `${n} bps (${(n / 100).toFixed(2)}%)`;
+function ValuationHistory({ id }: { id: string }) {
+  const [history, setHistory] = useState<RwaValuationEntry[]>([]);
+  const [loaded,  setLoaded]  = useState(false);
+
+  useEffect(() => {
+    api.rwaHistory(id)
+      .then(setHistory)
+      .catch(() => setHistory([]))
+      .finally(() => setLoaded(true));
+  }, [id]);
+
+  if (!loaded) return <div className="text-muted text-sm py-4">Loading history…</div>;
+  if (!history.length) return <div className="text-muted text-sm py-4">No valuation updates on record.</div>;
+
+  return (
+    <div className="divide-y divide-border">
+      <div className="hidden md:grid grid-cols-[6rem_1fr_1fr] gap-4 th border-b border-border bg-s2/40">
+        <span>Block</span>
+        <span className="text-right">Valuation USD</span>
+        <span>Updated By</span>
+      </div>
+      {[...history].reverse().map((e, i) => (
+        <div key={i} className="grid md:grid-cols-[6rem_1fr_1fr] gap-4 px-4 py-3 items-center text-sm hover:bg-s2 transition-colors">
+          <span className="text-muted text-xs font-mono">{e.block.toLocaleString()}</span>
+          <span className="text-right text-primary font-semibold text-xs">${formatUSD(e.valuationUsd)}</span>
+          <CopyHash hash={e.updatedBy} type="address" pre={6} suf={4} className="text-xs font-mono" />
+        </div>
+      ))}
+    </div>
+  );
 }
 
-function blockOrNone(val: string, label = 'No expiry'): string {
-  if (!val || val === '0') return label;
-  return `Block ${Number(val).toLocaleString()}`;
+function DocumentsList({ id }: { id: string }) {
+  const [docs,   setDocs]   = useState<RwaDocument[]>([]);
+  const [loaded, setLoaded] = useState(false);
+
+  useEffect(() => {
+    api.rwaDocuments(id)
+      .then(setDocs)
+      .catch(() => setDocs([]))
+      .finally(() => setLoaded(true));
+  }, [id]);
+
+  if (!loaded) return <div className="text-muted text-sm py-4">Loading documents…</div>;
+  if (!docs.length) return <div className="text-muted text-sm py-4">No documents attached to this asset.</div>;
+
+  return (
+    <div className="divide-y divide-border">
+      {docs.map((d, i) => (
+        <div key={i} className="px-4 py-3 hover:bg-s2 transition-colors">
+          <div className="flex items-start justify-between gap-4">
+            <div className="min-w-0 flex-1">
+              <div className="text-white text-sm mb-1">{d.description || 'Untitled document'}</div>
+              <CopyHash hash={d.hash} className="text-xs font-mono text-muted" />
+            </div>
+            <span className="text-muted text-xs shrink-0">Block {d.addedAt.toLocaleString()}</span>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
 }
+
+// ── Main page ─────────────────────────────────────────────────────────────────
 
 export default function RWADetail() {
   const { id } = useParams<{ id: string }>();
@@ -63,6 +200,7 @@ export default function RWADetail() {
 
   return (
     <div className="space-y-6 animate-slide-up">
+
       {/* Breadcrumb */}
       <div className="flex items-center gap-3">
         <Link to="/rwa" className="text-muted hover:text-white text-sm transition-colors">← RWA</Link>
@@ -82,20 +220,18 @@ export default function RWADetail() {
             <div className="flex flex-wrap gap-3 text-sm text-muted">
               <span className="bg-s3 border border-border px-2 py-0.5 rounded text-xs">{asset.asset_type}</span>
               <span>{asset.jurisdiction || 'No jurisdiction'}</span>
-              {asset.verified   && <span className="text-success">✓ Verified</span>}
+              {asset.verified    && <span className="text-success">✓ Verified</span>}
               {asset.accredited_only && <span className="text-warning">⚠ Accredited only</span>}
             </div>
           </div>
           <div className="text-right shrink-0">
-            <div className="text-3xl font-bold text-primary">
-              ${formatUSD(asset.valuation_usd)}
-            </div>
+            <div className="text-3xl font-bold text-primary">${formatUSD(asset.valuation_usd)}</div>
             <div className="text-muted text-xs">Valuation USD</div>
           </div>
         </div>
       </div>
 
-      {/* Details */}
+      {/* Details + Metadata */}
       <div className="grid md:grid-cols-2 gap-6">
         <div className="card p-6">
           <h2 className="font-semibold text-white mb-4">Asset Details</h2>
@@ -128,27 +264,30 @@ export default function RWADetail() {
           )}
         </div>
 
-        {asset.metadata_uri && (
-          <div className="card p-6">
-            <h2 className="font-semibold text-white mb-4">Metadata</h2>
+        <div className="card p-6">
+          <h2 className="font-semibold text-white mb-4">Metadata</h2>
+          {asset.metadata_uri ? (
             <Field label="URI">
               <span className="font-mono text-xs text-muted break-all">{asset.metadata_uri}</span>
             </Field>
-            <Field label="Title Hash">
-              {asset.title_hash
-                ? <CopyHash hash={asset.title_hash} className="font-mono text-xs text-muted" />
-                : <span className="text-muted">—</span>}
-            </Field>
-          </div>
-        )}
+          ) : null}
+          <Field label="Title Hash">
+            {asset.title_hash
+              ? <CopyHash hash={asset.title_hash} className="font-mono text-xs text-muted" />
+              : <span className="text-muted">—</span>}
+          </Field>
+          <Field label="Created Block">
+            <span className="text-muted">{asset.created_block.toLocaleString()}</span>
+          </Field>
+        </div>
       </div>
 
-      {/* Compliance & Trading */}
+      {/* Compliance + Trading */}
       <div className="grid md:grid-cols-2 gap-6">
         <div className="card p-6">
           <h2 className="font-semibold text-white mb-4">Compliance</h2>
-          <Field label="Regulation Type">
-            <span className="text-white">{asset.regulation_type || 'Open'}</span>
+          <Field label="Regulation">
+            <span className="text-white">{fmtRegulation(asset.regulation_type)}</span>
           </Field>
           <Field label="Lockup Until">
             <span className="text-white">{blockOrNone(asset.lockup_until, 'No lockup')}</span>
@@ -159,7 +298,7 @@ export default function RWADetail() {
             </span>
           </Field>
           <Field label="Maturity Block">
-            <span className="text-white">{blockOrNone(asset.maturity_block, 'No maturity')}</span>
+            <span className="text-white">{blockOrNone(asset.maturity_block, 'Perpetual')}</span>
           </Field>
           <Field label="Coupon Rate">
             <span className="text-white">{bps(asset.coupon_rate_bps)}</span>
@@ -184,60 +323,81 @@ export default function RWADetail() {
           <Field label="Transfer Count">
             <span className="text-white">{(asset.transfer_count ?? 0).toLocaleString()}</span>
           </Field>
-          <Field label="Created Block">
-            <span className="text-muted">{asset.created_block.toLocaleString()}</span>
-          </Field>
         </div>
       </div>
 
-      {/* Active listings */}
+      {/* Active Listings */}
       {listings.length > 0 && (
-        <div>
-          <h2 className="font-semibold text-white mb-3">
-            Active Listings ({listings.length})
-          </h2>
-          <div className="card overflow-hidden">
-            <div className="hidden md:grid grid-cols-[1fr_6rem_7rem_6rem_5rem_6rem_5rem] gap-3 th border-b border-border bg-s2/40">
-              <span>Seller</span>
-              <span className="text-right">Shares</span>
-              <span className="text-right">Price/Share</span>
-              <span className="text-right">Total</span>
-              <span className="text-right">Min Buy</span>
-              <span className="text-right">Expires</span>
-              <span className="text-center">Status</span>
-            </div>
-            <div className="divide-y divide-border">
-              {listings.map((l, i) => {
-                const totalEKH = (Number(l.price_per_share || 0) / 1e18) * Number(l.shares);
-                return (
-                  <div key={i}
-                    className="grid md:grid-cols-[1fr_6rem_7rem_6rem_5rem_6rem_5rem] gap-3 px-4 py-3 items-center hover:bg-s2 transition-colors text-sm">
-                    <CopyHash hash={l.seller} type="address" pre={8} suf={4} className="text-xs" />
-                    <span className="text-right text-white text-xs">{Number(l.shares).toLocaleString()}</span>
-                    <span className="text-right text-muted text-xs">
-                      {(Number(l.price_per_share || 0) / 1e18).toFixed(4)} EKH
-                    </span>
-                    <span className="text-right text-primary text-xs font-semibold">
-                      {totalEKH.toFixed(2)} EKH
-                    </span>
-                    <span className="text-right text-muted text-xs">
-                      {l.min_purchase && l.min_purchase !== '0'
-                        ? Number(l.min_purchase).toLocaleString()
-                        : '—'}
-                    </span>
-                    <span className="text-right text-muted text-xs">
-                      {blockOrNone(l.expires_at)}
-                    </span>
-                    <div className="flex justify-center">
-                      <Badge value={l.status ?? 'ACTIVE'} />
-                    </div>
+        <div className="card overflow-hidden">
+          <div className="px-4 py-3 border-b border-border">
+            <h2 className="font-semibold text-white">Active Listings ({listings.length})</h2>
+          </div>
+          <div className="hidden md:grid grid-cols-[1fr_6rem_7rem_6rem_5rem_6rem_5rem] gap-3 th bg-s2/40">
+            <span>Seller</span>
+            <span className="text-right">Shares</span>
+            <span className="text-right">Price/Share</span>
+            <span className="text-right">Total</span>
+            <span className="text-right">Min Buy</span>
+            <span className="text-right">Expires</span>
+            <span className="text-center">Status</span>
+          </div>
+          <div className="divide-y divide-border">
+            {listings.map((l, i) => {
+              const totalEKH = (Number(l.price_per_share || 0) / 1e18) * Number(l.shares);
+              return (
+                <div key={i} className="grid md:grid-cols-[1fr_6rem_7rem_6rem_5rem_6rem_5rem] gap-3 px-4 py-3 items-center text-sm hover:bg-s2 transition-colors">
+                  <CopyHash hash={l.seller} type="address" pre={8} suf={4} className="text-xs" />
+                  <span className="text-right text-white text-xs">{Number(l.shares).toLocaleString()}</span>
+                  <span className="text-right text-muted text-xs">
+                    {(Number(l.price_per_share || 0) / 1e18).toFixed(4)} EKH
+                  </span>
+                  <span className="text-right text-primary text-xs font-semibold">
+                    {totalEKH.toFixed(2)} EKH
+                  </span>
+                  <span className="text-right text-muted text-xs">
+                    {l.min_purchase && l.min_purchase !== '0'
+                      ? Number(l.min_purchase).toLocaleString() : '—'}
+                  </span>
+                  <span className="text-right text-muted text-xs">
+                    {blockOrNone(l.expires_at)}
+                  </span>
+                  <div className="flex justify-center">
+                    <Badge value={l.status ?? 'ACTIVE'} />
                   </div>
-                );
-              })}
-            </div>
+                </div>
+              );
+            })}
           </div>
         </div>
       )}
+
+      {/* Shareholders */}
+      <div className="card overflow-hidden">
+        <div className="px-4 py-3 border-b border-border">
+          <h2 className="font-semibold text-white">Shareholders</h2>
+          <p className="text-muted text-xs mt-0.5">All addresses holding shares of this asset</p>
+        </div>
+        <ShareholdersTable id={id!} />
+      </div>
+
+      {/* Valuation History */}
+      <div className="card overflow-hidden">
+        <div className="px-4 py-3 border-b border-border">
+          <h2 className="font-semibold text-white">Valuation History</h2>
+          <p className="text-muted text-xs mt-0.5">Every time the oracle or owner updated the USD valuation</p>
+        </div>
+        <ValuationHistory id={id!} />
+      </div>
+
+      {/* Documents */}
+      <div className="card overflow-hidden">
+        <div className="px-4 py-3 border-b border-border">
+          <h2 className="font-semibold text-white">Legal Documents</h2>
+          <p className="text-muted text-xs mt-0.5">Title deeds, audit reports, and other attached documents</p>
+        </div>
+        <DocumentsList id={id!} />
+      </div>
+
     </div>
   );
 }

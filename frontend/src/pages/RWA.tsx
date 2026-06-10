@@ -6,9 +6,17 @@ import Badge from '../components/Badge';
 import { SkTable } from '../components/Skeleton';
 
 const TYPE_ICONS: Record<string, string> = {
-  PROPERTY:  '🏘',
-  BUSINESS:  '🏢',
-  COMMODITY: '⚙',
+  Property:             '🏘',
+  Business:             '🏢',
+  Commodity:            '⚙',
+  Bond:                 '📄',
+  Art:                  '🎨',
+  PrivateEquity:        '💼',
+  Invoice:              '🧾',
+  IntellectualProperty: '💡',
+  CarbonCredit:         '🌿',
+  PreciousMetal:        '🪙',
+  Infrastructure:       '🏗',
 };
 
 function fmtUSD(wei: string): string {
@@ -65,7 +73,7 @@ export default function RWA() {
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-white mb-1">Real-World Assets</h1>
         <p className="text-muted text-sm">
-          Property · Business · Commodity · KYC-gated compliance ·{' '}
+          11 asset classes · KYC-gated compliance ·{' '}
           {assets.length} assets · Total ~${totalVal.toLocaleString()}
         </p>
       </div>

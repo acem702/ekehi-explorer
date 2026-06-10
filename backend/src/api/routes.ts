@@ -2,7 +2,7 @@ import { Router, Request, Response, NextFunction } from 'express';
 import { get, all, run } from '../models';
 import { evm, tryNative } from '../rpc';
 
-export const router = Router();
+export const router: Router = Router();
 
 // ── In-memory rate limiter ────────────────────────────────────────────────────
 
@@ -190,10 +190,31 @@ router.get('/rwa/:id', async (req, res) => {
 
   const listings = all('SELECT * FROM rwa_listings WHERE asset_id = ? AND status = ?', req.params.id, 'Open');
 
-  // Try to get live data from node
+  // Refresh live stats from node (volume, dividends, transfer count)
   const live = await tryNative<Record<string, unknown>>('ekh_getRwaAsset', [req.params.id]);
 
   res.json({ ...(asset as object), listings, live: live ?? null });
+});
+
+router.get('/rwa/:id/shareholders', async (req, res) => {
+  const holders = await tryNative<Array<{ address: string; shares: string }>>(
+    'ekh_getShareholders', [req.params.id],
+  );
+  res.json(holders ?? []);
+});
+
+router.get('/rwa/:id/history', async (req, res) => {
+  const history = await tryNative<Array<{ block: number; valuationUsd: string; updatedBy: string }>>(
+    'ekh_getRwaValuationHistory', [req.params.id],
+  );
+  res.json(history ?? []);
+});
+
+router.get('/rwa/:id/documents', async (req, res) => {
+  const docs = await tryNative<Array<{ hash: string; description: string; addedAt: number }>>(
+    'ekh_getRwaDocuments', [req.params.id],
+  );
+  res.json(docs ?? []);
 });
 
 // ── NFT Collections ───────────────────────────────────────────────────────────

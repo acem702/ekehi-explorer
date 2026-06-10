@@ -103,6 +103,23 @@ export interface RwaAsset {
   transfer_count: number;
 }
 
+export interface RwaShareholder {
+  address: string;
+  shares: string;
+}
+
+export interface RwaValuationEntry {
+  block: number;
+  valuationUsd: string;
+  updatedBy: string;
+}
+
+export interface RwaDocument {
+  hash: string;
+  description: string;
+  addedAt: number;
+}
+
 export interface RwaListing {
   id: string;
   asset_id: string;
@@ -245,7 +262,10 @@ export const api = {
     if (type && type !== 'ALL') qs.set('type', type);
     return apiFetch<Paginated<RwaAsset>>(`/rwa?${qs}`);
   },
-  rwaAsset: (id: string) => apiFetch<RwaAsset & { listings: RwaListing[] }>(`/rwa/${id}`),
+  rwaAsset:          (id: string) => apiFetch<RwaAsset & { listings: RwaListing[] }>(`/rwa/${id}`),
+  rwaShareholders:   (id: string) => apiFetch<RwaShareholder[]>(`/rwa/${id}/shareholders`),
+  rwaHistory:        (id: string) => apiFetch<RwaValuationEntry[]>(`/rwa/${id}/history`),
+  rwaDocuments:      (id: string) => apiFetch<RwaDocument[]>(`/rwa/${id}/documents`),
 
   nftCollections: (page = 1) =>
     apiFetch<Paginated<NftCollection>>(`/nft-collections?page=${page}`),
