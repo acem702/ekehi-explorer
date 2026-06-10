@@ -18,7 +18,7 @@ jobs:
       # ── Build backend ────────────────────────────────────────────────────────
       - name: Install backend deps
         working-directory: backend
-        run: npm ci
+        run: npm install
 
       - name: Build backend
         working-directory: backend
@@ -27,7 +27,7 @@ jobs:
       # ── Build frontend ───────────────────────────────────────────────────────
       - name: Install frontend deps
         working-directory: frontend
-        run: npm ci
+        run: npm install
 
       - name: Build frontend
         working-directory: frontend
