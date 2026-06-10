@@ -1,0 +1,71 @@
+name: Build & Deploy Explorer
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  build-deploy:
+    runs-on: ubuntu-22.04
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: |
+            backend/package-lock.json
+            frontend/package-lock.json
+
+      # ── Build backend ────────────────────────────────────────────────────────
+      - name: Install backend deps
+        working-directory: backend
+        run: npm ci
+
+      - name: Build backend
+        working-directory: backend
+        run: npm run build
+
+      # ── Build frontend ───────────────────────────────────────────────────────
+      - name: Install frontend deps
+        working-directory: frontend
+        run: npm ci
+
+      - name: Build frontend
+        working-directory: frontend
+        run: npm run build
+
+      # ── Deploy ───────────────────────────────────────────────────────────────
+      - name: Deploy to server
+        env:
+          DEPLOY_KEY: ${{ secrets.DEPLOY_KEY }}
+          SERVER_IP:  ${{ secrets.SERVER_IP }}
+        run: |
+          echo "$DEPLOY_KEY" > /tmp/deploy_key
+          chmod 600 /tmp/deploy_key
+          SSH="ssh -i /tmp/deploy_key -o StrictHostKeyChecking=no ubuntu@$SERVER_IP"
+          SCP="scp -i /tmp/deploy_key -o StrictHostKeyChecking=no"
+
+          # Create dirs
+          $SSH "mkdir -p ~/ekehi-explorer/backend ~/ekehi-explorer/frontend"
+
+          # Stop backend
+          $SSH "sudo systemctl stop ekehi-explorer || true"
+
+          # Upload backend build + package.json + deployments
+          $SCP -r backend/dist                 ubuntu@$SERVER_IP:~/ekehi-explorer/backend/
+          $SCP    backend/package.json          ubuntu@$SERVER_IP:~/ekehi-explorer/backend/
+          $SCP    deployments.json              ubuntu@$SERVER_IP:~/ekehi-explorer/
+
+          # Install prod deps on server (no devDeps, no workspace resolution)
+          $SSH "cd ~/ekehi-explorer/backend && npm install --omit=dev"
+
+          # Upload frontend static files
+          $SCP -r frontend/dist/.              ubuntu@$SERVER_IP:~/ekehi-explorer/frontend/
+
+          # Restart backend + reload nginx
+          $SSH "sudo systemctl start ekehi-explorer && sudo systemctl reload nginx"
+
+          rm /tmp/deploy_key

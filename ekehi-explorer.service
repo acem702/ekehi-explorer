@@ -1,0 +1,20 @@
+[Unit]
+Description=Ekehi Explorer Backend
+After=network.target
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/home/ubuntu/ekehi-explorer/backend
+ExecStart=/usr/bin/node dist/index.js
+Restart=always
+RestartSec=5
+
+Environment=PORT=3002
+Environment=EVM_RPC_URL=http://localhost:8545
+Environment=NATIVE_RPC_URL=http://localhost:9944
+Environment=DATA_DIR=/home/ubuntu/ekehi-explorer/data
+Environment=DEPLOYMENTS_PATH=/home/ubuntu/ekehi-explorer/deployments.json
+
+[Install]
+WantedBy=multi-user.target
